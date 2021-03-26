@@ -1,6 +1,10 @@
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::device::{Device, DeviceExtensions, Features};
-use vulkano::instance::{Instance, InstanceExtensions, PhysicalDevice};
+use vulkano::device::{Device, DeviceExtensions};
+use vulkano::image::ImageUsage;
+use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::swapchain::{
+    ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
+};
 use vulkano_win::VkSurfaceBuild;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -36,10 +40,15 @@ fn main() {
         .expect("Device does not have a queue family that supports graphics.");
 
     let (device, mut queues) = {
+        let device_ext = DeviceExtensions {
+            khr_swapchain: true,
+            ..DeviceExtensions::none()
+        };
+
         Device::new(
             physical,
-            &Features::none(),
-            &DeviceExtensions::none(),
+            physical.supported_features(),
+            &device_ext,
             [(queue_family, 0.5)].iter().cloned(),
         )
         .expect("Failed to create device")
@@ -47,14 +56,39 @@ fn main() {
 
     let queue = queues.next().unwrap();
 
-    let data = 12;
-    let buffer = CpuAccessibleBuffer::from_data(device.clone(), BufferUsage::all(), false, data)
-        .expect("Failed to create buffer");
-
+    // ---- Setup window ----
     let events_loop = EventLoop::new();
     let surface = WindowBuilder::new()
         .build_vk_surface(&events_loop, instance.clone())
         .unwrap();
+
+    // ---- Setup Swapchain ----
+    let (swapchain, images) = {
+        let caps = surface
+            .capabilities(physical)
+            .expect("Failed to get capabilities.");
+        let dimensions = caps.current_extent.unwrap_or([1280, 1024]);
+        let alpha = caps.supported_composite_alpha.iter().next().unwrap();
+        let format = caps.supported_formats[0].0;
+
+        Swapchain::new(
+            device.clone(),
+            surface.clone(),
+            caps.min_image_count,
+            format,
+            dimensions,
+            1,
+            ImageUsage::color_attachment(),
+            &queue,
+            SurfaceTransform::Identity,
+            alpha,
+            PresentMode::Fifo,
+            FullscreenExclusive::Default,
+            true,
+            ColorSpace::SrgbNonLinear,
+        )
+        .expect("Failed to create swapchain")
+    };
 
     events_loop.run(|event, _, control_flow| {
         *control_flow = ControlFlow::Wait;

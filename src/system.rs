@@ -1,5 +1,9 @@
+use imgui::{Context, Ui};
+use imgui_vulkano_renderer::Renderer;
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::sync::Arc;
 use vulkano::device::{Device, DeviceExtensions, Queue};
+use vulkano::format::Format;
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain::{
@@ -17,10 +21,13 @@ pub struct System {
     pub surface: Arc<Surface<Window>>,
     pub swapchain: Arc<Swapchain<Window>>,
     pub images: Vec<Arc<SwapchainImage<Window>>>,
+    pub imgui: Context,
+    pub platform: WinitPlatform,
+    pub renderer: Renderer,
 }
 
 impl System {
-    pub fn init() -> System {
+    pub fn init(window_title: &str) -> System {
         // Basic commands taken from the vulkano guide: https://vulkano.rs/guide/introduction
         // and the vulkano imgui examples, here:
         // https://github.com/Tenebryo/imgui-vulkano-renderer/blob/master/examples/support/mod.rs
@@ -36,6 +43,7 @@ impl System {
 
         let event_loop = EventLoop::new();
         let surface = WindowBuilder::new()
+            .with_title(window_title.to_owned())
             .build_vk_surface(&event_loop, instance.clone())
             .unwrap();
 
@@ -91,6 +99,16 @@ impl System {
             .expect("Failed to create swapchain")
         };
 
+        let mut imgui = Context::create();
+        imgui.set_ini_filename(None);
+
+        let mut platform = WinitPlatform::init(&mut imgui);
+        platform.attach_window(imgui.io_mut(), &surface.window(), HiDpiMode::Rounded);
+
+        let mut format = Format::R8G8B8A8Srgb;
+        let renderer = Renderer::init(&mut imgui, device.clone(), queue.clone(), format)
+            .expect("Failed to initialize renderer");
+
         System {
             event_loop,
             device,
@@ -98,10 +116,13 @@ impl System {
             surface,
             swapchain,
             images,
+            imgui,
+            platform,
+            renderer,
         }
     }
 
-    pub fn main_loop(self) {
+    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
         let System {
             event_loop,
             device,

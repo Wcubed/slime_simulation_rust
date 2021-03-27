@@ -11,7 +11,7 @@ use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain;
 use vulkano::swapchain::{
     AcquireError, ColorSpace, FullscreenExclusive, PresentMode, Surface, SurfaceTransform,
-    Swapchain,
+    Swapchain, SwapchainCreationError,
 };
 use vulkano::sync;
 use vulkano::sync::{FlushError, GpuFuture};
@@ -34,8 +34,7 @@ pub struct System {
 
 impl System {
     pub fn init(window_title: &str) -> System {
-        // Basic commands taken from the vulkano guide: https://vulkano.rs/guide/introduction
-        // and the vulkano imgui examples, here:
+        // Basic commands taken from the vulkano imgui examples:
         // https://github.com/Tenebryo/imgui-vulkano-renderer/blob/master/examples/support/mod.rs
 
         let instance = {
@@ -168,7 +167,37 @@ impl System {
                     surface.window().request_redraw();
                 }
                 Event::RedrawRequested(_) => {
+                    // ---- Stick to the framerate ----
+                    let t = Instant::now();
+                    let since_last = t.duration_since(last_redraw);
+                    last_redraw = t;
+
+                    if since_last < target_frame_time {
+                        std::thread::sleep(target_frame_time - since_last);
+                    }
+
+                    // ---- Cleanup ----
+
+                    previous_frame_end.as_mut().unwrap().cleanup_finished();
+
+                    // ---- Recreate swapchain if necessary ----
+
+                    if recreate_swapchain {
+                        let dimensions: [u32; 2] = surface.window().inner_size().into();
+                        let (new_swapchain, new_images) =
+                            match swapchain.recreate_with_dimensions(dimensions) {
+                                Ok(r) => r,
+                                Err(SwapchainCreationError::UnsupportedDimensions) => return,
+                                Err(e) => panic!("Failed to recreate swapchain: {:?}", e),
+                            };
+
+                        images = new_images;
+                        swapchain = new_swapchain;
+                        recreate_swapchain = false;
+                    }
+
                     // ---- Run the user's imgui code ----
+
                     let mut ui = imgui.frame();
                     let mut run = true;
 

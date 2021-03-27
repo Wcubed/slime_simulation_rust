@@ -1,3 +1,4 @@
+use crate::simulation::Simulation;
 use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
@@ -141,7 +142,7 @@ impl System {
 
     pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(
         self,
-        display_image: Arc<StorageImage<Format>>,
+        simulation: Simulation,
         mut run_ui: F,
     ) {
         let System {
@@ -236,11 +237,13 @@ impl System {
                     platform.prepare_render(&ui, surface.window());
                     let draw_data = ui.render();
 
-                    let extent_x = display_image
+                    let extent_x = simulation
+                        .image
                         .dimensions()
                         .width()
                         .min(images[image_num].dimensions()[0]);
-                    let extent_y = display_image
+                    let extent_y = simulation
+                        .image
                         .dimensions()
                         .height()
                         .min(images[image_num].dimensions()[1]);
@@ -253,7 +256,7 @@ impl System {
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
                         .unwrap()
                         .copy_image(
-                            display_image.clone(),
+                            simulation.image.clone(),
                             [0; 3],
                             0,
                             0,

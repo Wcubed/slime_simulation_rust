@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::Format;
-use vulkano::image::{ImageUsage, SwapchainImage};
+use vulkano::image::{ImageUsage, StorageImage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain;
 use vulkano::swapchain::{
@@ -79,7 +79,7 @@ impl System {
 
         let queue = queues.next().unwrap();
 
-        let mut format = Format::R8G8B8A8Srgb;
+        let mut format = Format::R8G8B8A8Unorm;
 
         let (swapchain, images) = {
             let caps = surface
@@ -135,7 +135,11 @@ impl System {
         }
     }
 
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
+    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(
+        self,
+        display_image: Arc<StorageImage<Format>>,
+        mut run_ui: F,
+    ) {
         let System {
             event_loop,
             device,
@@ -228,12 +232,35 @@ impl System {
                     platform.prepare_render(&ui, surface.window());
                     let draw_data = ui.render();
 
+                    let extent_x = display_image
+                        .dimensions()
+                        .width()
+                        .min(images[image_num].dimensions()[0]);
+                    let extent_y = display_image
+                        .dimensions()
+                        .height()
+                        .min(images[image_num].dimensions()[1]);
+
                     let mut cmd_buf_builder =
                         AutoCommandBufferBuilder::new(device.clone(), queue.family())
                             .expect("Failed to create command buffer");
+                    // Clear screen and show the desired image.
                     cmd_buf_builder
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
-                        .expect("Failed to create image clear command");
+                        .unwrap()
+                        .copy_image(
+                            display_image.clone(),
+                            [0; 3],
+                            0,
+                            0,
+                            images[image_num].clone(),
+                            [0; 3],
+                            0,
+                            0,
+                            [extent_x, extent_y, 1],
+                            1,
+                        )
+                        .expect("Failed to create image copy command");
 
                     renderer
                         .draw_commands(

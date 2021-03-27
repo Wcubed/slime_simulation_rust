@@ -1,5 +1,4 @@
 use crate::system::System;
-use image::{ImageBuffer, Rgba};
 use imgui::{im_str, Condition, Window};
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
@@ -54,14 +53,6 @@ fn main() {
         .unwrap(),
     );
 
-    let buf = CpuAccessibleBuffer::from_iter(
-        system.device.clone(),
-        BufferUsage::all(),
-        false,
-        (0..1024 * 1024 * 4).map(|_| 0u8),
-    )
-    .expect("failed to create buffer");
-
     let mut builder =
         AutoCommandBufferBuilder::new(system.device.clone(), system.queue.family()).unwrap();
     builder
@@ -71,8 +62,6 @@ fn main() {
             set.clone(),
             (),
         )
-        .unwrap()
-        .copy_image_to_buffer(image.clone(), buf.clone())
         .unwrap();
     let command_buffer = builder.build().unwrap();
 
@@ -83,13 +72,9 @@ fn main() {
         .wait(None)
         .unwrap();
 
-    let buffer_content = buf.read().unwrap();
-    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
-    image.save("image.png").unwrap();
-
     // ---- Window imgui loop ----
 
-    system.main_loop(move |_, ui| {
+    system.main_loop(image, move |_, ui| {
         Window::new(im_str!("Hello World!"))
             .size([300.0, 110.0], Condition::FirstUseEver)
             .build(ui, || {

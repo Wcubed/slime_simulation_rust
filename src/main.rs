@@ -1,5 +1,5 @@
 use crate::system::System;
-use imgui::{im_str, Window};
+use imgui::{im_str, Condition, Window};
 
 mod system;
 
@@ -8,6 +8,8 @@ fn main() {
 
     let system = System::init("Slime Simulation");
     system.main_loop(move |_, ui| {
-        Window::new(im_str!("Hello World!"));
+        Window::new(im_str!("Hello World!"))
+            .size([300.0, 110.0], Condition::FirstUseEver)
+            .build(ui, || {});
     })
 }

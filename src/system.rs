@@ -63,6 +63,8 @@ impl System {
         let (device, mut queues) = {
             let device_ext = DeviceExtensions {
                 khr_swapchain: true,
+                // Needed for compute shaders.
+                khr_storage_buffer_storage_class: true,
                 ..DeviceExtensions::none()
             };
 

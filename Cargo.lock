@@ -943,6 +943,7 @@ dependencies = [
  "imgui-vulkano-renderer",
  "imgui-winit-support",
  "vulkano",
+ "vulkano-shaders",
  "vulkano-win",
  "winit",
 ]

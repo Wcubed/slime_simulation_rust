@@ -1,6 +1,5 @@
 use crate::system::System;
 use imgui::{im_str, Condition, Window};
-use std::sync::{Arc, Barrier};
 
 mod simulation;
 mod system;
@@ -13,7 +12,6 @@ fn main() {
     // ---- Computing to an image buffer ----
 
     let sim = simulation::Simulation::init(system.device.clone(), system.queue.clone());
-    sim.run_once();
 
     // ---- Window imgui loop ----
 

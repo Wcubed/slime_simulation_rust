@@ -37,18 +37,14 @@ impl Simulation {
 
         let shader = shader::Shader::load(device.clone()).expect("failed to create shader module");
 
-        let compute_pipeline = Arc::new(
+        let pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &shader.main_entry_point(), &(), None)
                 .expect("failed to create compute pipeline"),
         );
 
         let set = Arc::new(
             PersistentDescriptorSet::start(
-                compute_pipeline
-                    .layout()
-                    .descriptor_set_layout(0)
-                    .unwrap()
-                    .clone(),
+                pipeline.layout().descriptor_set_layout(0).unwrap().clone(),
             )
             .add_image(image.clone())
             .unwrap()
@@ -60,7 +56,7 @@ impl Simulation {
             image,
             device,
             queue,
-            pipeline: compute_pipeline,
+            pipeline,
             set,
         }
     }

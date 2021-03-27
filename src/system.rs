@@ -6,8 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::device::{Device, DeviceExtensions, Queue};
-use vulkano::format::Format;
-use vulkano::image::{ImageUsage, StorageImage, SwapchainImage};
+use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain;
 use vulkano::swapchain::{
@@ -84,8 +83,7 @@ impl System {
 
         let queue = queues.next().unwrap();
 
-        let mut format = Format::R8G8B8A8Unorm;
-
+        let format;
         let (swapchain, images) = {
             let caps = surface
                 .capabilities(physical)
@@ -219,6 +217,10 @@ impl System {
                     }
 
                     // ---- Create draw commands ----
+
+                    println!("---- ! ----");
+                    // There is probably a way to run the simulation without blocking.
+                    simulation.run_once();
 
                     let (image_num, suboptimal, acquire_future) =
                         match swapchain::acquire_next_image(swapchain.clone(), None) {

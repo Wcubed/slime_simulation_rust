@@ -49,6 +49,10 @@ impl System {
         let event_loop = EventLoop::new();
         let surface = WindowBuilder::new()
             .with_title(window_title.to_owned())
+            .with_inner_size(winit::dpi::PhysicalSize {
+                width: 1024,
+                height: 1024,
+            })
             .build_vk_surface(&event_loop, instance.clone())
             .unwrap();
 

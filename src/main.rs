@@ -1,6 +1,6 @@
 use crate::system::System;
 use imgui::{im_str, Condition, Window};
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
@@ -107,9 +107,11 @@ uint hash(uint state) {
 
 void main() {    
     highp uint index = gl_GlobalInvocationID.y * imageSize(img).y + gl_GlobalInvocationID.x;
-    float pseudorandom = hash(index) / 4294967295.0;
+    float r = hash(index) / 4294967295.0;
+    float g = hash(index + 1000000) / 4294967295.0;
+    float b = hash(index + 696000000) / 4294967295.0;
 
-    vec4 to_write = vec4(vec3(pseudorandom), 1.0);
+    vec4 to_write = vec4(r, g, b, 1.0);
     imageStore(img, ivec2(gl_GlobalInvocationID.xy), to_write);
 }
 "

@@ -2,13 +2,19 @@ use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::Format;
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::swapchain;
 use vulkano::swapchain::{
-    ColorSpace, FullscreenExclusive, PresentMode, Surface, SurfaceTransform, Swapchain,
+    AcquireError, ColorSpace, FullscreenExclusive, PresentMode, Surface, SurfaceTransform,
+    Swapchain,
 };
+use vulkano::sync;
+use vulkano::sync::{FlushError, GpuFuture};
 use vulkano_win::VkSurfaceBuild;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -72,13 +78,20 @@ impl System {
 
         let queue = queues.next().unwrap();
 
+        let mut format = Format::R8G8B8A8Srgb;
+
         let (swapchain, images) = {
             let caps = surface
                 .capabilities(physical)
                 .expect("Failed to get capabilities.");
+            format = caps.supported_formats[0].0;
             let dimensions = caps.current_extent.unwrap_or([1280, 1024]);
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
-            let format = caps.supported_formats[0].0;
+
+            let image_usage = ImageUsage {
+                transfer_destination: true,
+                ..ImageUsage::color_attachment()
+            };
 
             Swapchain::new(
                 device.clone(),
@@ -87,7 +100,7 @@ impl System {
                 format,
                 dimensions,
                 1,
-                ImageUsage::color_attachment(),
+                image_usage,
                 &queue,
                 SurfaceTransform::Identity,
                 alpha,
@@ -105,7 +118,6 @@ impl System {
         let mut platform = WinitPlatform::init(&mut imgui);
         platform.attach_window(imgui.io_mut(), &surface.window(), HiDpiMode::Rounded);
 
-        let mut format = Format::R8G8B8A8Srgb;
         let renderer = Renderer::init(&mut imgui, device.clone(), queue.clone(), format)
             .expect("Failed to initialize renderer");
 
@@ -130,19 +142,116 @@ impl System {
             surface,
             mut swapchain,
             mut images,
+            mut imgui,
+            mut platform,
+            mut renderer,
             ..
         } = self;
 
-        event_loop.run(|event, _, control_flow| {
+        // Apparently there are various reasons why we might need to re-create the swapchain.
+        // For example when the target surface has changed size.
+        // This keeps track of whether the previous frame encountered one of those reasons.
+        let mut recreate_swapchain = false;
+        let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
+        let mut last_redraw = Instant::now();
+
+        // target 60 fps
+        let target_frame_time = Duration::from_millis(1000 / 60);
+
+        event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
             match event {
+                Event::MainEventsCleared => {
+                    platform
+                        .prepare_frame(imgui.io_mut(), &surface.window())
+                        .expect("Failed to prepare frame.");
+                    surface.window().request_redraw();
+                }
+                Event::RedrawRequested(_) => {
+                    // ---- Run the user's imgui code ----
+                    let mut ui = imgui.frame();
+                    let mut run = true;
+
+                    run_ui(&mut run, &mut ui);
+
+                    if !run {
+                        *control_flow = ControlFlow::Exit;
+                    }
+
+                    // ---- Create draw commands ----
+
+                    let (image_num, suboptimal, acquire_future) =
+                        match swapchain::acquire_next_image(swapchain.clone(), None) {
+                            Ok(r) => r,
+                            Err(AcquireError::OutOfDate) => {
+                                recreate_swapchain = true;
+                                return;
+                            }
+                            Err(e) => panic!("Failed to acquire next image: {:?}", e),
+                        };
+
+                    if suboptimal {
+                        recreate_swapchain = true;
+                    }
+
+                    platform.prepare_render(&ui, surface.window());
+                    let draw_data = ui.render();
+
+                    let mut cmd_buf_builder =
+                        AutoCommandBufferBuilder::new(device.clone(), queue.family())
+                            .expect("Failed to create command buffer");
+                    cmd_buf_builder
+                        .clear_color_image(images[image_num].clone(), [0.0; 4].into())
+                        .expect("Failed to create image clear command");
+
+                    renderer
+                        .draw_commands(
+                            &mut cmd_buf_builder,
+                            queue.clone(),
+                            images[image_num].clone(),
+                            draw_data,
+                        )
+                        .expect("Rendering failed");
+
+                    let cmd_buf = cmd_buf_builder
+                        .build()
+                        .expect("Failed to build command buffer");
+
+                    // ---- Execute the draw commands ----
+
+                    let future = previous_frame_end
+                        .take()
+                        .unwrap()
+                        .join(acquire_future)
+                        .then_execute(queue.clone(), cmd_buf)
+                        .unwrap()
+                        .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)
+                        .then_signal_fence_and_flush();
+
+                    match future {
+                        Ok(future) => {
+                            previous_frame_end = Some(future.boxed());
+                        }
+                        Err(FlushError::OutOfDate) => {
+                            recreate_swapchain = true;
+                            previous_frame_end = Some(sync::now(device.clone()).boxed());
+                        }
+                        Err(e) => {
+                            println!("Failed to flush future: {:?}", e);
+                            previous_frame_end = Some(sync::now(device.clone()).boxed());
+                        }
+                    }
+                }
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => {
                     *control_flow = ControlFlow::Exit;
                 }
-                _ => (),
+                event => {
+                    // Pass events on to imgui.
+                    platform.handle_event(imgui.io_mut(), surface.window(), &event);
+                }
             }
         });
     }

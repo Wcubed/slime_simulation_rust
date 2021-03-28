@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::f32::consts::PI;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
@@ -75,6 +76,7 @@ impl Simulation {
         let mut rng = rand::thread_rng();
         let agent_amount = 10000;
 
+        // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
             // No clue what the dummy is for.
             _dummy0: [0u8; 4],
@@ -82,7 +84,7 @@ impl Simulation {
                 rng.gen_range(0..image_size.width()) as f32,
                 rng.gen_range(0..image_size.height()) as f32,
             ],
-            angle: 0.0,
+            angle: rng.gen::<f32>() * 2.0 * PI,
         });
         let agents_buffer =
             CpuAccessibleBuffer::from_iter(device.clone(), BufferUsage::all(), false, agent_iter)

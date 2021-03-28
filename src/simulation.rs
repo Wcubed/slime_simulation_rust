@@ -204,6 +204,7 @@ pub mod agent_shader {
 #version 450
 
 const float PI = 3.1415926535897932384626433832795;
+const float sensor_angle_spacing = 0.1;
 
 struct Agent {
     vec2 pos;
@@ -223,6 +224,9 @@ layout(push_constant) uniform PushConstantData {
     float delta_time;
 } pc;
 
+int width = imageSize(out_img).x;
+int height = imageSize(out_img).y;
+
 uint hash(uint state) {
     state ^= 2747636419u;
     state *= 2654435769u;
@@ -237,6 +241,30 @@ float normalize_from_hash(uint hash_val) {
     return float(hash_val) / 4294967295.0;
 }
 
+
+float sense(Agent agent, float sensor_angle_offset) {
+    int sensor_radius = 2;
+    float sensor_centre_distance = 1.0;
+    
+    float sensor_angle = agent.angle + sensor_angle_offset;
+    vec2 sensor_dir_norm = vec2(cos(sensor_angle), sin(sensor_angle));    
+    ivec2 sensor_centre = ivec2(agent.pos + sensor_dir_norm * sensor_centre_distance);
+    
+    float sum = 0;
+    for (int x = -sensor_radius; x <= sensor_radius; x++) {
+        for (int y = -sensor_radius; y <= sensor_radius; y++) {
+            ivec2 sample_pos = ivec2(sensor_centre.x + x, sensor_centre.y + y);
+
+            if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
+                sum += imageLoad(trail_img, sample_pos).x;
+            }
+        }
+    }
+    
+    return sum;
+}
+
+
 void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id >= buf.data.length()) {
@@ -248,6 +276,10 @@ void main() {
 
     Agent agent = buf.data[id];
     uint random = hash(uint(agent.pos.y * width + agent.pos.x + hash(id)));
+    
+    float sense_forward = sense(agent, 0);
+    float sense_left = sense(agent, sensor_angle_spacing);
+    float sense_right = sense(agent, -sensor_angle_spacing);
     
     // Move agent according to angle and speed.
     vec2 unit_direction = vec2(cos(agent.angle), sin(agent.angle));
@@ -291,11 +323,10 @@ void main() {
     vec4 sum = vec4(0.0, 0.0, 0.0, 0.0);
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
-            uint sampleX = gl_GlobalInvocationID.x + x;
-            uint sampleY = gl_GlobalInvocationID.y + y;
+            ivec2 sample_pos = ivec2(gl_GlobalInvocationID.x + x, gl_GlobalInvocationID.y + y);
             
-            if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
-                sum += imageLoad(in_img, ivec2(sampleX, sampleY));
+            if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
+                sum += imageLoad(in_img, sample_pos);
             }
         }
     }

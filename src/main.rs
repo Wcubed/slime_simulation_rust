@@ -15,15 +15,13 @@ fn main() {
 
     // ---- Window imgui loop ----
 
-    system.main_loop(sim.image.clone(), move |_, ui| {
+    system.main_loop(sim, move |_, mut counter, ui| {
         Window::new(im_str!("Hello World!"))
             .size([300.0, 110.0], Condition::FirstUseEver)
             .build(ui, || {
                 ui.text(im_str!("Hello World!"));
-                let clicked = ui.button(&im_str!("Run computation!"), [300.0, 30.0]);
-
-                if clicked {
-                    sim.run_once();
+                if ui.button(im_str!("Generate new"), [200.0, 30.0]) {
+                    *counter = *counter + 1;
                 }
             });
     })

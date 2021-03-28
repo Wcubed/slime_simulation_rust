@@ -13,7 +13,7 @@ pub struct Simulation {
     pub image: Arc<StorageImage<Format>>,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
-    pub pipeline: Arc<ComputePipeline<PipelineLayout<shader::Layout>>>,
+    pub pipeline: Arc<ComputePipeline<PipelineLayout<compute_shader::Layout>>>,
     pub set: Arc<
         PersistentDescriptorSet<(
             (),
@@ -35,7 +35,8 @@ impl Simulation {
         )
         .unwrap();
 
-        let shader = shader::Shader::load(device.clone()).expect("failed to create shader module");
+        let shader =
+            compute_shader::Shader::load(device.clone()).expect("failed to create shader module");
 
         let pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &shader.main_entry_point(), &(), None)
@@ -60,30 +61,9 @@ impl Simulation {
             set,
         }
     }
-
-    pub fn run_once(&self) {
-        let mut builder =
-            AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family()).unwrap();
-        builder
-            .dispatch(
-                [1024 / 8, 1024 / 8, 1],
-                self.pipeline.clone(),
-                self.set.clone(),
-                (),
-            )
-            .unwrap();
-        let command_buffer = builder.build().unwrap();
-
-        let finished = command_buffer.execute(self.queue.clone()).unwrap();
-        finished
-            .then_signal_fence_and_flush()
-            .unwrap()
-            .wait(None)
-            .unwrap();
-    }
 }
 
-mod shader {
+pub mod compute_shader {
     vulkano_shaders::shader! {
         ty: "compute",
         src:
@@ -93,6 +73,10 @@ mod shader {
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, rgba8) uniform writeonly image2D img;
+
+layout(push_constant) uniform PushConstantData {
+    uint offset;
+} pc;
 
 uint hash(uint state) {
     state ^= 2747636419u;
@@ -104,8 +88,8 @@ uint hash(uint state) {
     return state;
 }
 
-void main() {    
-    highp uint index = gl_GlobalInvocationID.y * imageSize(img).y + gl_GlobalInvocationID.x;
+void main() {
+    highp uint index = gl_GlobalInvocationID.y * imageSize(img).y + gl_GlobalInvocationID.x + (pc.offset * 1000000);
     float r = hash(index) / 4294967295.0;
     float g = hash(index + 1000000) / 4294967295.0;
     float b = hash(index + 696000000) / 4294967295.0;

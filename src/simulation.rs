@@ -196,6 +196,8 @@ pub mod agent_shader {
 "
 #version 450
 
+const float PI = 3.1415926535897932384626433832795;
+
 struct Agent {
     vec2 pos;
     float angle;
@@ -224,19 +226,36 @@ uint hash(uint state) {
     return state;
 }
 
+float normalize_from_hash(uint hash_val) {
+    return float(hash_val) / 4294967295.0;
+}
+
 void main() {
-    if (gl_GlobalInvocationID.x >= buf.data.length()) {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= buf.data.length()) {
         return;
     }
+    
+    int width = imageSize(out_img).x;
+    int height = imageSize(out_img).y;
 
-    Agent agent = buf.data[gl_GlobalInvocationID.x];
+    Agent agent = buf.data[id];
+    uint random = hash(uint(agent.pos.y * width + agent.pos.x + hash(id)));
     
     // Move agent according to angle and speed.
     vec2 unit_direction = vec2(cos(agent.angle), sin(agent.angle));
     vec2 new_pos = agent.pos + unit_direction * pc.agent_speed * pc.delta_time;
     
+    // Randomly bounce if agent hits the sides.
+    if (new_pos.x < 0 || new_pos.x >= width || new_pos.y < 0 || new_pos.y >= height) {
+        new_pos.x = min(width - 0.01, max(0, new_pos.x));
+        new_pos.y = min(height - 0.01, max(0, new_pos.y));
+
+        buf.data[id].angle = normalize_from_hash(random) * 2 * PI;
+    }
     
-    buf.data[gl_GlobalInvocationID.x].pos = new_pos;
+    
+    buf.data[id].pos = new_pos;
 
     // Draw trail.
     imageStore(out_img, ivec2(agent.pos), vec4(1.0));

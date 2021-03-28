@@ -74,7 +74,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 10000;
+        let agent_amount = 10;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -180,7 +180,9 @@ impl Simulation {
                 self.agent_sim_set.clone(),
                 agent_shader::ty::PushConstantData {
                     // Pixels per second.
-                    agent_speed: 500.0,
+                    agent_speed: 50.0,
+                    // Radians per second.
+                    agent_turn_speed: 0.1,
                     // Seconds per frame. (60fps)
                     delta_time: 0.016667,
                 },
@@ -221,6 +223,7 @@ layout(set = 0, binding = 2) buffer Agents {
 
 layout(push_constant) uniform PushConstantData {
     float agent_speed;
+    float agent_turn_speed;
     float delta_time;
 } pc;
 
@@ -243,7 +246,7 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 2;
+    int sensor_radius = 1;
     float sensor_centre_distance = 1.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
@@ -277,9 +280,25 @@ void main() {
     Agent agent = buf.data[id];
     uint random = hash(uint(agent.pos.y * width + agent.pos.x + hash(id)));
     
+    // Decide which way to turn.
     float sense_forward = sense(agent, 0);
     float sense_left = sense(agent, sensor_angle_spacing);
     float sense_right = sense(agent, -sensor_angle_spacing);
+    
+    float random_steer_strength = normalize_from_hash(random) * pc.agent_turn_speed * pc.delta_time;
+    
+    if (sense_forward > sense_left && sense_forward > sense_right) {
+        // Continue straight.
+    } else if (sense_forward < sense_left && sense_forward < sense_right) {
+        // Don't know whether to go left or right? Go random.
+        buf.data[id].angle += (random_steer_strength - 0.5) * 2;
+    } else if (sense_left > sense_right) {
+        // Go left.
+        buf.data[id].angle -= random_steer_strength;
+    } else if (sense_left < sense_right) {
+        // Go right.
+        buf.data[id].angle += random_steer_strength;
+    }
     
     // Move agent according to angle and speed.
     vec2 unit_direction = vec2(cos(agent.angle), sin(agent.angle));

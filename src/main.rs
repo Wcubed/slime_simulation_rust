@@ -15,7 +15,7 @@ fn main() {
 
     // ---- Window imgui loop ----
 
-    system.main_loop(sim, move |_, mut counter, ui| {
+    system.main_loop(sim, move |_, counter, ui| {
         Window::new(im_str!("Hello World!"))
             .size([300.0, 110.0], Condition::FirstUseEver)
             .build(ui, || {

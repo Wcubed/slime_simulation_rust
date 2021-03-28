@@ -20,7 +20,7 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-use crate::simulation::compute_shader;
+use crate::simulation::noise_shader;
 
 pub struct System {
     pub event_loop: EventLoop<()>,
@@ -244,12 +244,12 @@ impl System {
                     let draw_data = ui.render();
 
                     let extent_x = simulation
-                        .image
+                        .result_image
                         .dimensions()
                         .width()
                         .min(images[image_num].dimensions()[0]);
                     let extent_y = simulation
-                        .image
+                        .result_image
                         .dimensions()
                         .height()
                         .min(images[image_num].dimensions()[1]);
@@ -257,19 +257,15 @@ impl System {
                     let mut cmd_buf_builder =
                         AutoCommandBufferBuilder::new(device.clone(), queue.family())
                             .expect("Failed to create command buffer");
-                    // Clear screen, compute the image, and show it on-screen.
                     cmd_buf_builder
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
-                        .unwrap()
-                        .dispatch(
-                            [1024 / 8, 1024 / 8, 1],
-                            simulation.pipeline.clone(),
-                            simulation.set.clone(),
-                            compute_shader::ty::PushConstantData { offset: counter },
-                        )
-                        .unwrap()
+                        .unwrap();
+
+                    simulation.build_commands(counter, &mut cmd_buf_builder);
+
+                    cmd_buf_builder
                         .copy_image(
-                            simulation.image.clone(),
+                            simulation.result_image.clone(),
                             [0; 3],
                             0,
                             0,

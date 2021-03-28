@@ -140,7 +140,7 @@ impl System {
 
     pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(
         self,
-        simulation: Simulation,
+        display_image: Arc<vulkano::image::StorageImage<vulkano::format::Format>>,
         mut run_ui: F,
     ) {
         let System {
@@ -218,9 +218,9 @@ impl System {
 
                     // ---- Create draw commands ----
 
-                    println!("---- ! ----");
+                    //println!("---- ! ----");
                     // There is probably a way to run the simulation without blocking.
-                    simulation.run_once();
+                    //simulation.run_once();
 
                     let (image_num, suboptimal, acquire_future) =
                         match swapchain::acquire_next_image(swapchain.clone(), None) {
@@ -239,13 +239,11 @@ impl System {
                     platform.prepare_render(&ui, surface.window());
                     let draw_data = ui.render();
 
-                    let extent_x = simulation
-                        .image
+                    let extent_x = display_image
                         .dimensions()
                         .width()
                         .min(images[image_num].dimensions()[0]);
-                    let extent_y = simulation
-                        .image
+                    let extent_y = display_image
                         .dimensions()
                         .height()
                         .min(images[image_num].dimensions()[1]);
@@ -258,7 +256,7 @@ impl System {
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
                         .unwrap()
                         .copy_image(
-                            simulation.image.clone(),
+                            display_image.clone(),
                             [0; 3],
                             0,
                             0,

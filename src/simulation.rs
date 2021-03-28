@@ -20,7 +20,7 @@ pub struct Simulation {
         )>,
     >,
     noise_image: Arc<StorageImage<Format>>,
-    blur_pipeline: Arc<ComputePipeline<PipelineLayout<blur_shader::Layout>>>,
+    blur_pipeline: Arc<ComputePipeline<PipelineLayout<blur_fade_shader::Layout>>>,
     blur_set: Arc<
         PersistentDescriptorSet<(
             (
@@ -80,7 +80,7 @@ impl Simulation {
         );
 
         let blur_shader =
-            blur_shader::Shader::load(device.clone()).expect("failed to create shader module");
+            blur_fade_shader::Shader::load(device.clone()).expect("failed to create shader module");
 
         let blur_pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &blur_shader.main_entry_point(), &(), None)
@@ -173,7 +173,7 @@ void main() {
     }
 }
 
-pub mod blur_shader {
+pub mod blur_fade_shader {
     vulkano_shaders::shader! {
             ty: "compute",
             src:
@@ -189,6 +189,7 @@ void main() {
     int width = imageSize(in_img).x;
     int height = imageSize(in_img).y;
     
+    // ---- Blur ----
     vec4 sum = vec4(0.0, 0.0, 0.0, 0.0);
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
@@ -201,8 +202,12 @@ void main() {
         }
     }
     
-    vec4 result = sum / 9;
-    imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), result);
+    vec4 blurred = sum / 9;
+    
+    // ---- Fade ----
+    vec4 faded = blurred * 0.5;
+    
+    imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), faded);
 }
 "
     }

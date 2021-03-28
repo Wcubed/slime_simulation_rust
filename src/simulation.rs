@@ -74,7 +74,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 10;
+        let agent_amount = 100;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -206,7 +206,7 @@ pub mod agent_shader {
 #version 450
 
 const float PI = 3.1415926535897932384626433832795;
-const float sensor_angle_spacing = 0.1;
+const float sensor_angle_spacing = PI / 2;
 
 struct Agent {
     vec2 pos;
@@ -246,7 +246,7 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 1;
+    int sensor_radius = 2;
     float sensor_centre_distance = 1.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
@@ -285,19 +285,19 @@ void main() {
     float sense_left = sense(agent, sensor_angle_spacing);
     float sense_right = sense(agent, -sensor_angle_spacing);
     
-    float random_steer_strength = normalize_from_hash(random) * pc.agent_turn_speed * pc.delta_time;
+    float random_steer_strength = normalize_from_hash(random);
     
     if (sense_forward > sense_left && sense_forward > sense_right) {
         // Continue straight.
     } else if (sense_forward < sense_left && sense_forward < sense_right) {
         // Don't know whether to go left or right? Go random.
-        buf.data[id].angle += (random_steer_strength - 0.5) * 2;
+        buf.data[id].angle += (random_steer_strength - 0.5) * 2 * pc.agent_turn_speed * pc.delta_time;
     } else if (sense_left > sense_right) {
         // Go left.
-        buf.data[id].angle -= random_steer_strength;
+        buf.data[id].angle -= random_steer_strength * pc.agent_turn_speed * pc.delta_time;
     } else if (sense_left < sense_right) {
         // Go right.
-        buf.data[id].angle += random_steer_strength;
+        buf.data[id].angle += random_steer_strength * pc.agent_turn_speed * pc.delta_time;
     }
     
     // Move agent according to angle and speed.

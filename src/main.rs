@@ -15,14 +15,12 @@ fn main() {
 
     // ---- Window imgui loop ----
 
-    system.main_loop(sim, move |_, counter, ui| {
+    system.main_loop(sim, move |_, ui| {
         Window::new(im_str!("Hello World!"))
             .size([300.0, 110.0], Condition::FirstUseEver)
             .build(ui, || {
                 ui.text(im_str!("Hello World!"));
-                if ui.button(im_str!("Generate new"), [200.0, 30.0]) {
-                    *counter = *counter + 1;
-                }
+                ui.button(im_str!("Generate new"), [200.0, 30.0]);
             });
     })
 }

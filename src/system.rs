@@ -140,7 +140,7 @@ impl System {
         }
     }
 
-    pub fn main_loop<F: FnMut(&mut bool, &mut u32, &mut Ui) + 'static>(
+    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(
         self,
         simulation: Simulation,
         mut run_ui: F,
@@ -214,17 +214,13 @@ impl System {
                     let mut ui = imgui.frame();
                     let mut run = true;
 
-                    run_ui(&mut run, &mut counter, &mut ui);
+                    run_ui(&mut run, &mut ui);
 
                     if !run {
                         *control_flow = ControlFlow::Exit;
                     }
 
                     // ---- Create draw commands ----
-
-                    //println!("---- ! ----");
-                    // There is probably a way to run the simulation without blocking.
-                    //simulation.run_once();
 
                     let (image_num, suboptimal, acquire_future) =
                         match swapchain::acquire_next_image(swapchain.clone(), None) {
@@ -261,7 +257,7 @@ impl System {
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
                         .unwrap();
 
-                    simulation.build_commands(counter, &mut cmd_buf_builder);
+                    simulation.build_commands(&mut cmd_buf_builder);
 
                     cmd_buf_builder
                         .copy_image(

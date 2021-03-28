@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
@@ -19,7 +20,12 @@ pub struct Simulation {
     agent_sim_set: Arc<
         PersistentDescriptorSet<(
             (
-                (),
+                (
+                    (),
+                    PersistentDescriptorSetImg<
+                        Arc<vulkano::image::StorageImage<vulkano::format::Format>>,
+                    >,
+                ),
                 PersistentDescriptorSetImg<
                     Arc<vulkano::image::StorageImage<vulkano::format::Format>>,
                 >,
@@ -65,10 +71,15 @@ impl Simulation {
         )
         .unwrap();
 
+        let mut rng = rand::thread_rng();
+
         let agent_iter = (0..100).map(|_i| agent_shader::ty::Agent {
             // No clue what the dummy is for.
             _dummy0: [0u8; 4],
-            pos: [0.0, 0.0],
+            pos: [
+                rng.gen_range(0..image_size.width()) as f32,
+                rng.gen_range(0..image_size.height()) as f32,
+            ],
             angle: 0.0,
         });
         let agents_buffer =
@@ -91,6 +102,8 @@ impl Simulation {
                     .unwrap()
                     .clone(),
             )
+            .add_image(result_image.clone())
+            .unwrap()
             .add_image(agent_sim_image.clone())
             .unwrap()
             .add_buffer(agents_buffer)
@@ -136,13 +149,34 @@ impl Simulation {
     }
 
     /// After running the built commands, the result_image will be filled.
-    pub fn build_commands(&self, counter: u32, builder: &mut AutoCommandBufferBuilder) {
+    pub fn build_commands(&self, builder: &mut AutoCommandBufferBuilder) {
         builder
+            // Transfer old trails.
+            .copy_image(
+                self.result_image.clone(),
+                [0; 3],
+                0,
+                0,
+                self.agent_sim_image.clone(),
+                [0; 3],
+                0,
+                0,
+                [
+                    self.result_image.dimensions().width(),
+                    self.result_image.dimensions().height(),
+                    1,
+                ],
+                1,
+            )
+            .unwrap()
             .dispatch(
-                [1024 / 8, 1024 / 8, 1],
+                [100, 1, 1],
                 self.agent_sim_pipeline.clone(),
                 self.agent_sim_set.clone(),
-                agent_shader::ty::PushConstantData { offset: counter },
+                agent_shader::ty::PushConstantData {
+                    agent_speed: 5.0,
+                    delta_time: 0.1,
+                },
             )
             .unwrap()
             .dispatch(
@@ -167,15 +201,17 @@ struct Agent {
     float angle;
 };
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(set = 0, binding = 0, rgba8) uniform writeonly image2D img;
-layout(set = 0, binding = 1) buffer Agents {
+layout(set = 0, binding = 0, rgba8) uniform readonly image2D trail_img;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D out_img;
+layout(set = 0, binding = 2) buffer Agents {
     Agent data[];
 } buf;
 
 layout(push_constant) uniform PushConstantData {
-    uint offset;
+    float agent_speed;
+    float delta_time;
 } pc;
 
 uint hash(uint state) {
@@ -189,13 +225,21 @@ uint hash(uint state) {
 }
 
 void main() {
-    highp uint index = gl_GlobalInvocationID.y * imageSize(img).y + gl_GlobalInvocationID.x + (pc.offset * 1000000);
-    float r = hash(index) / 4294967295.0;
-    float g = hash(index + 1000000) / 4294967295.0;
-    float b = hash(index + 696000000) / 4294967295.0;
+    if (gl_GlobalInvocationID.x >= buf.data.length()) {
+        return;
+    }
 
-    vec4 to_write = vec4(r, g, b, 1.0);
-    imageStore(img, ivec2(gl_GlobalInvocationID.xy), to_write);
+    Agent agent = buf.data[gl_GlobalInvocationID.x];
+    
+    // Move agent according to angle and speed.
+    vec2 unit_direction = vec2(cos(agent.angle), sin(agent.angle));
+    vec2 new_pos = agent.pos + unit_direction * pc.agent_speed * pc.delta_time;
+    
+    
+    buf.data[gl_GlobalInvocationID.x].pos = new_pos;
+
+    // Draw trail.
+    imageStore(out_img, ivec2(agent.pos), vec4(1.0));
 }
 "
     }
@@ -233,7 +277,7 @@ void main() {
     vec4 blurred = sum / 9;
     
     // ---- Fade ----
-    vec4 faded = blurred * 0.5;
+    vec4 faded = blurred * 0.99;
     
     imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), faded);
 }

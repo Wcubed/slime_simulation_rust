@@ -16,6 +16,7 @@ pub struct Simulation {
     pub result_image: Arc<StorageImage<Format>>,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
+    agent_amount: u32,
     agent_sim_pipeline: Arc<ComputePipeline<PipelineLayout<agent_shader::Layout>>>,
     agent_sim_set: Arc<
         PersistentDescriptorSet<(
@@ -72,8 +73,9 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
+        let agent_amount = 10000;
 
-        let agent_iter = (0..100).map(|_i| agent_shader::ty::Agent {
+        let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
             // No clue what the dummy is for.
             _dummy0: [0u8; 4],
             pos: [
@@ -140,6 +142,7 @@ impl Simulation {
             result_image,
             device,
             queue,
+            agent_amount,
             agent_sim_pipeline,
             agent_sim_set,
             agent_sim_image,
@@ -170,12 +173,14 @@ impl Simulation {
             )
             .unwrap()
             .dispatch(
-                [100, 1, 1],
+                [self.agent_amount, 1, 1],
                 self.agent_sim_pipeline.clone(),
                 self.agent_sim_set.clone(),
                 agent_shader::ty::PushConstantData {
-                    agent_speed: 5.0,
-                    delta_time: 0.1,
+                    // Pixels per second.
+                    agent_speed: 500.0,
+                    // Seconds per frame. (60fps)
+                    delta_time: 0.016667,
                 },
             )
             .unwrap()

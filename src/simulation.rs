@@ -1,6 +1,9 @@
 use std::sync::Arc;
+use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::descriptor::descriptor_set::{PersistentDescriptorSet, PersistentDescriptorSetImg};
+use vulkano::descriptor::descriptor_set::{
+    PersistentDescriptorSet, PersistentDescriptorSetBuf, PersistentDescriptorSetImg,
+};
 use vulkano::descriptor::pipeline_layout::PipelineLayout;
 use vulkano::descriptor::PipelineLayoutAbstract;
 use vulkano::device::{Device, Queue};
@@ -12,14 +15,19 @@ pub struct Simulation {
     pub result_image: Arc<StorageImage<Format>>,
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
-    noise_pipeline: Arc<ComputePipeline<PipelineLayout<noise_shader::Layout>>>,
-    noise_set: Arc<
+    agent_sim_pipeline: Arc<ComputePipeline<PipelineLayout<agent_shader::Layout>>>,
+    agent_sim_set: Arc<
         PersistentDescriptorSet<(
-            (),
-            PersistentDescriptorSetImg<Arc<vulkano::image::StorageImage<vulkano::format::Format>>>,
+            (
+                (),
+                PersistentDescriptorSetImg<
+                    Arc<vulkano::image::StorageImage<vulkano::format::Format>>,
+                >,
+            ),
+            PersistentDescriptorSetBuf<Arc<CpuAccessibleBuffer<[agent_shader::ty::Agent]>>>,
         )>,
     >,
-    noise_image: Arc<StorageImage<Format>>,
+    agent_sim_image: Arc<StorageImage<Format>>,
     blur_pipeline: Arc<ComputePipeline<PipelineLayout<blur_fade_shader::Layout>>>,
     blur_set: Arc<
         PersistentDescriptorSet<(
@@ -42,7 +50,7 @@ impl Simulation {
         };
         let image_format = Format::R8G8B8A8Unorm;
 
-        let noise_image = StorageImage::new(
+        let agent_sim_image = StorageImage::new(
             device.clone(),
             image_size,
             image_format,
@@ -57,23 +65,35 @@ impl Simulation {
         )
         .unwrap();
 
-        let noise_shader =
-            noise_shader::Shader::load(device.clone()).expect("failed to create shader module");
+        let agent_iter = (0..100).map(|_i| agent_shader::ty::Agent {
+            // No clue what the dummy is for.
+            _dummy0: [0u8; 4],
+            pos: [0.0, 0.0],
+            angle: 0.0,
+        });
+        let agents_buffer =
+            CpuAccessibleBuffer::from_iter(device.clone(), BufferUsage::all(), false, agent_iter)
+                .unwrap();
 
-        let noise_pipeline = Arc::new(
+        let noise_shader =
+            agent_shader::Shader::load(device.clone()).expect("failed to create shader module");
+
+        let agent_sim_pipeline = Arc::new(
             ComputePipeline::new(device.clone(), &noise_shader.main_entry_point(), &(), None)
                 .expect("failed to create compute pipeline"),
         );
 
-        let noise_set = Arc::new(
+        let agent_sim_set = Arc::new(
             PersistentDescriptorSet::start(
-                noise_pipeline
+                agent_sim_pipeline
                     .layout()
                     .descriptor_set_layout(0)
                     .unwrap()
                     .clone(),
             )
-            .add_image(noise_image.clone())
+            .add_image(agent_sim_image.clone())
+            .unwrap()
+            .add_buffer(agents_buffer)
             .unwrap()
             .build()
             .unwrap(),
@@ -95,7 +115,7 @@ impl Simulation {
                     .unwrap()
                     .clone(),
             )
-            .add_image(noise_image.clone())
+            .add_image(agent_sim_image.clone())
             .unwrap()
             .add_image(result_image.clone())
             .unwrap()
@@ -107,9 +127,9 @@ impl Simulation {
             result_image,
             device,
             queue,
-            noise_pipeline,
-            noise_set,
-            noise_image,
+            agent_sim_pipeline,
+            agent_sim_set,
+            agent_sim_image,
             blur_pipeline,
             blur_set,
         }
@@ -120,9 +140,9 @@ impl Simulation {
         builder
             .dispatch(
                 [1024 / 8, 1024 / 8, 1],
-                self.noise_pipeline.clone(),
-                self.noise_set.clone(),
-                noise_shader::ty::PushConstantData { offset: counter },
+                self.agent_sim_pipeline.clone(),
+                self.agent_sim_set.clone(),
+                agent_shader::ty::PushConstantData { offset: counter },
             )
             .unwrap()
             .dispatch(
@@ -135,16 +155,24 @@ impl Simulation {
     }
 }
 
-pub mod noise_shader {
+pub mod agent_shader {
     vulkano_shaders::shader! {
         ty: "compute",
         src:
 "
 #version 450
 
+struct Agent {
+    vec2 pos;
+    float angle;
+};
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, rgba8) uniform writeonly image2D img;
+layout(set = 0, binding = 1) buffer Agents {
+    Agent data[];
+} buf;
 
 layout(push_constant) uniform PushConstantData {
     uint offset;

@@ -20,7 +20,7 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-use crate::simulation::noise_shader;
+use crate::simulation::agent_shader;
 
 pub struct System {
     pub event_loop: EventLoop<()>,

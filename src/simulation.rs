@@ -19,10 +19,16 @@ pub struct Simulation {
             PersistentDescriptorSetImg<Arc<vulkano::image::StorageImage<vulkano::format::Format>>>,
         )>,
     >,
+    noise_image: Arc<StorageImage<Format>>,
     blur_pipeline: Arc<ComputePipeline<PipelineLayout<blur_shader::Layout>>>,
     blur_set: Arc<
         PersistentDescriptorSet<(
-            (),
+            (
+                (),
+                PersistentDescriptorSetImg<
+                    Arc<vulkano::image::StorageImage<vulkano::format::Format>>,
+                >,
+            ),
             PersistentDescriptorSetImg<Arc<vulkano::image::StorageImage<vulkano::format::Format>>>,
         )>,
     >,
@@ -30,13 +36,23 @@ pub struct Simulation {
 
 impl Simulation {
     pub fn init(device: Arc<Device>, queue: Arc<Queue>) -> Simulation {
-        let image = StorageImage::new(
+        let image_size = Dimensions::Dim2d {
+            width: 1024,
+            height: 1024,
+        };
+        let image_format = Format::R8G8B8A8Unorm;
+
+        let noise_image = StorageImage::new(
             device.clone(),
-            Dimensions::Dim2d {
-                width: 1024,
-                height: 1024,
-            },
-            Format::R8G8B8A8Unorm,
+            image_size,
+            image_format,
+            Some(queue.family()),
+        )
+        .unwrap();
+        let result_image = StorageImage::new(
+            device.clone(),
+            image_size,
+            image_format,
             Some(queue.family()),
         )
         .unwrap();
@@ -57,7 +73,7 @@ impl Simulation {
                     .unwrap()
                     .clone(),
             )
-            .add_image(image.clone())
+            .add_image(noise_image.clone())
             .unwrap()
             .build()
             .unwrap(),
@@ -79,18 +95,21 @@ impl Simulation {
                     .unwrap()
                     .clone(),
             )
-            .add_image(image.clone())
+            .add_image(noise_image.clone())
+            .unwrap()
+            .add_image(result_image.clone())
             .unwrap()
             .build()
             .unwrap(),
         );
 
         Simulation {
-            result_image: image,
+            result_image,
             device,
             queue,
             noise_pipeline,
             noise_set,
+            noise_image,
             blur_pipeline,
             blur_set,
         }
@@ -163,10 +182,27 @@ pub mod blur_shader {
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(set = 0, binding = 0, rgba8) uniform writeonly image2D in_img;
+layout(set = 0, binding = 0, rgba8) uniform readonly image2D in_img;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D out_img;
 
 void main() {
+    int width = imageSize(in_img).x;
+    int height = imageSize(in_img).y;
     
+    vec4 sum = vec4(0.0, 0.0, 0.0, 0.0);
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            uint sampleX = gl_GlobalInvocationID.x + x;
+            uint sampleY = gl_GlobalInvocationID.y + y;
+            
+            if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
+                sum += imageLoad(in_img, ivec2(sampleX, sampleY));
+            }
+        }
+    }
+    
+    vec4 result = sum / 9;
+    imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), result);
 }
 "
     }

@@ -74,7 +74,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 100;
+        let agent_amount = 10;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -246,12 +246,12 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 2;
+    int sensor_radius = 1;
     float sensor_centre_distance = 1.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
     vec2 sensor_dir_norm = vec2(cos(sensor_angle), sin(sensor_angle));    
-    ivec2 sensor_centre = ivec2(agent.pos + sensor_dir_norm * sensor_centre_distance);
+    ivec2 sensor_centre = ivec2(agent.pos + (sensor_dir_norm * sensor_centre_distance));
     
     float sum = 0;
     for (int x = -sensor_radius; x <= sensor_radius; x++) {
@@ -259,18 +259,29 @@ float sense(Agent agent, float sensor_angle_offset) {
             ivec2 sample_pos = ivec2(sensor_centre.x + x, sensor_centre.y + y);
 
             if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
+                // TODO: Somehow this load call without the debug call blacks out the top part of the image.
                 sum += imageLoad(trail_img, sample_pos).x;
+                
+                // TODO: remove debug.
+                if (sensor_angle_offset == 0) {
+                    imageStore(out_img, sample_pos, vec4(0.0, 0.0, 1.0, 1.0));
+                } else if (sensor_angle_offset < 0) {
+                    imageStore(out_img, sample_pos, vec4(0.0, 1.0, 0.0, 1.0));
+                } else if (sensor_angle_offset > 0) {
+                    imageStore(out_img, sample_pos, vec4(1.0, 0.0, 0.0, 1.0));
+                }
+                // End of debug
             }
         }
     }
     
-    return sum;
+    return sum / ((sensor_radius * 2 + 1) * (sensor_radius * 2 + 1));
 }
 
 
 void main() {
     uint id = gl_GlobalInvocationID.x;
-    if (id >= buf.data.length()) {
+    if (id < 0 || id >= buf.data.length()) {
         return;
     }
     
@@ -281,6 +292,7 @@ void main() {
     uint random = hash(uint(agent.pos.y * width + agent.pos.x + hash(id)));
     
     // Decide which way to turn.
+    
     float sense_forward = sense(agent, 0);
     float sense_left = sense(agent, sensor_angle_spacing);
     float sense_right = sense(agent, -sensor_angle_spacing);
@@ -338,10 +350,12 @@ void main() {
     int width = imageSize(in_img).x;
     int height = imageSize(in_img).y;
     
+    int blur_radius = 1;
+    
     // ---- Blur ----
     vec4 sum = vec4(0.0, 0.0, 0.0, 0.0);
-    for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
+    for (int x = -blur_radius; x <= blur_radius; x++) {
+        for (int y = -blur_radius; y <= blur_radius; y++) {
             ivec2 sample_pos = ivec2(gl_GlobalInvocationID.x + x, gl_GlobalInvocationID.y + y);
             
             if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
@@ -350,7 +364,7 @@ void main() {
         }
     }
     
-    vec4 blurred = sum / 9;
+    vec4 blurred = sum / ((blur_radius * 2 + 1) * (blur_radius * 2 + 1));
     
     // ---- Fade ----
     vec4 faded = blurred * 0.99;

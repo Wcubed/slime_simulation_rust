@@ -221,6 +221,7 @@ pub mod agent_shader {
 #version 450
 
 const float PI = 3.1415926535897932384626433832795;
+const float HALF_PI = PI / 0.5;
 
 struct Agent {
     vec2 pos;
@@ -328,19 +329,43 @@ void main() {
     vec2 unit_direction = vec2(cos(agent.angle), sin(agent.angle));
     vec2 new_pos = agent.pos + unit_direction * pc.agent_speed * pc.delta_time;
     
-    // Randomly bounce if agent hits the sides.
-    if (new_pos.x < 0) {
-        new_pos.x = 0.01;
-        buf.data[id].angle = normalize_from_hash(random) * PI - (0.5 * PI);
-    } else if (new_pos.x >= width) {
-        new_pos.x = width - 0.01;
-        buf.data[id].angle = normalize_from_hash(random) * PI + (0.5 * PI);
-    }
-    if (new_pos.y < 0) {
-        new_pos.y = 0.01;
+    // How far to move from the edge when bouncing against it.
+    float edge_holdout = 0.01;
+    
+    bool top = new_pos.y < 0;
+    bool bottom = new_pos.y >= height;
+    bool left = new_pos.x < 0;
+    bool right = new_pos.x >= width;
+    
+    // Randomly bounce if agent hits the corners or the sides.
+    // Never bounce into the side, always away from it.
+    if (bottom && left) {
+        new_pos.x = edge_holdout;
+        new_pos.y = edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * -HALF_PI;
+    } else if (bottom && right) {
+        new_pos.x = width - edge_holdout;
+        new_pos.y = edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * HALF_PI - PI;
+    } else if (top && left) {
+        new_pos.x = edge_holdout;
+        new_pos.y = height - edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * HALF_PI;
+    } else if (top && right) {
+        new_pos.x = width - edge_holdout;
+        new_pos.y = height - edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * HALF_PI + HALF_PI;
+    } else if (left) {
+        new_pos.x = edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * PI - HALF_PI;
+    } else if (right) {
+        new_pos.x = width - edge_holdout;
+        buf.data[id].angle = normalize_from_hash(random) * PI + HALF_PI;
+    } else if (top) {
+        new_pos.y = edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * PI;
-    } else if (new_pos.y >= height) {
-        new_pos.y = height - 0.01;
+    } else if (bottom) {
+        new_pos.y = height - edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * -PI;
     }
     

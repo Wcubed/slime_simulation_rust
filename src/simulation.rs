@@ -297,11 +297,6 @@ float sense(Agent agent, float sensor_angle_offset) {
         }
     }
     
-    // TODO: Remove debug.
-    /*if (sum > 0) {
-        imageStore(out_img, sensor_centre, vec4(0.0, sum, 0.0, 1.0));
-    }*/
-    
     return sum;
 }
 
@@ -354,19 +349,19 @@ void main() {
     // Never bounce into the side, always away from it.
     if (bottom && left) {
         new_pos.x = edge_holdout;
-        new_pos.y = edge_holdout;
+        new_pos.y = height - edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * -HALF_PI;
     } else if (bottom && right) {
         new_pos.x = width - edge_holdout;
-        new_pos.y = edge_holdout;
+        new_pos.y = height - edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * HALF_PI - PI;
     } else if (top && left) {
         new_pos.x = edge_holdout;
-        new_pos.y = height - edge_holdout;
+        new_pos.y = edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * HALF_PI;
     } else if (top && right) {
         new_pos.x = width - edge_holdout;
-        new_pos.y = height - edge_holdout;
+        new_pos.y = edge_holdout;
         buf.data[id].angle = normalize_from_hash(random) * HALF_PI + HALF_PI;
     } else if (left) {
         new_pos.x = edge_holdout;

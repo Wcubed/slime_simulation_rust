@@ -18,7 +18,6 @@ use vulkano::format::Format;
 use vulkano::image::{Dimensions, ImageLayout, StorageImage};
 use vulkano::pipeline::ComputePipeline;
 use vulkano::swapchain::SwapchainAcquireFuture;
-use vulkano::sync::{AccessFlagBits, GpuFuture, JoinFuture, PipelineStages};
 
 pub struct Simulation {
     pub result_image: Arc<StorageImage<Format>>,
@@ -81,7 +80,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 10;
+        let agent_amount = 100;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -200,7 +199,7 @@ impl Simulation {
                     // Pixels per second.
                     agent_speed: 50.0,
                     // Radians per second.
-                    agent_turn_speed: 0.1,
+                    agent_turn_speed: 5.0,
                     // Seconds per frame. (60fps)
                     delta_time: 0.016667,
                 },
@@ -273,8 +272,8 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 1;
-    float sensor_centre_distance = 1.0;
+    int sensor_radius = 2;
+    float sensor_centre_distance = 2.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
     vec2 sensor_dir_norm = vec2(cos(sensor_angle), sin(sensor_angle));    
@@ -291,7 +290,12 @@ float sense(Agent agent, float sensor_angle_offset) {
         }
     }
     
-    return sum / ((sensor_radius * 2 + 1) * (sensor_radius * 2 + 1));
+    // TODO: Remove debug.
+    if (sum > 0) {
+        imageStore(out_img, sensor_centre, vec4(0.0, 1.0, 0.0, 1.0));
+    }
+    
+    return sum;
 }
 
 
@@ -308,7 +312,6 @@ void main() {
     uint random = hash(uint(agent.pos.y * width + agent.pos.x + hash(id)));
     
     // Decide which way to turn.
-    
     float sense_forward = sense(agent, 0);
     float sense_left = sense(agent, sensor_angle_spacing);
     float sense_right = sense(agent, -sensor_angle_spacing);
@@ -334,8 +337,8 @@ void main() {
     
     // Randomly bounce if agent hits the sides.
     if (new_pos.x < 0 || new_pos.x >= width || new_pos.y < 0 || new_pos.y >= height) {
-        new_pos.x = min(width - 0.01, max(0, new_pos.x));
-        new_pos.y = min(height - 0.01, max(0, new_pos.y));
+        new_pos.x = min(width - 0.01, max(0.01, new_pos.x));
+        new_pos.y = min(height - 0.01, max(0.01, new_pos.y));
 
         buf.data[id].angle = normalize_from_hash(random) * 2 * PI;
     }
@@ -383,7 +386,7 @@ void main() {
     vec4 blurred = sum / ((blur_radius * 2 + 1) * (blur_radius * 2 + 1));
     
     // ---- Fade ----
-    vec4 faded = blurred * 0.99;
+    vec4 faded = blurred * 0.999;
     
     imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), faded);
 }

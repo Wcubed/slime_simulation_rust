@@ -156,7 +156,8 @@ impl Simulation {
     /// The command buffers should be executed in the order given.
     pub fn create_command_buffers(
         &self,
-        parameters: &agent_shader::ty::PushConstantData,
+        sim_parameters: &agent_shader::ty::PushConstantData,
+        fade_parameters: &blur_fade_shader::ty::PushConstantData,
     ) -> (AutoCommandBuffer, AutoCommandBuffer, AutoCommandBuffer) {
         let mut copy_builder =
             AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family())
@@ -187,10 +188,10 @@ impl Simulation {
                 .expect("Failed to create command buffer");
         sim_builder
             .dispatch(
-                [self.agent_amount, 1, 1],
+                [self.agent_amount / 64, 1, 1],
                 self.agent_sim_pipeline.clone(),
                 self.agent_sim_set.clone(),
-                parameters.clone(),
+                sim_parameters.clone(),
             )
             .unwrap();
         let sim_buffer = sim_builder.build().unwrap();
@@ -203,7 +204,7 @@ impl Simulation {
                 [1024 / 8, 1024 / 8, 1],
                 self.blur_pipeline.clone(),
                 self.blur_set.clone(),
-                (),
+                fade_parameters.clone(),
             )
             .unwrap();
         let blur_buffer = blur_builder.build().unwrap();
@@ -317,10 +318,10 @@ void main() {
         buf.data[id].angle += (random_steer_strength - 0.5) * 2 * pc.agent_turn_speed * pc.delta_time;
     } else if (sense_left > sense_right) {
         // Go left.
-        buf.data[id].angle -= random_steer_strength * pc.agent_turn_speed * pc.delta_time;
+        buf.data[id].angle += random_steer_strength * pc.agent_turn_speed * pc.delta_time;
     } else if (sense_left < sense_right) {
         // Go right.
-        buf.data[id].angle += random_steer_strength * pc.agent_turn_speed * pc.delta_time;
+        buf.data[id].angle -= random_steer_strength * pc.agent_turn_speed * pc.delta_time;
     }
     
     // Move agent according to angle and speed.
@@ -357,6 +358,13 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba8) uniform readonly image2D in_img;
 layout(set = 0, binding = 1, rgba8) uniform writeonly image2D out_img;
 
+layout(push_constant) uniform PushConstantData {
+    // How many time is passed per frame.
+    float delta_time;
+    // How much color is 'evaporated' per second.
+    float evaporate_speed;
+} pc;
+
 void main() {
     int width = imageSize(in_img).x;
     int height = imageSize(in_img).y;
@@ -377,10 +385,13 @@ void main() {
     
     vec4 blurred = sum / ((blur_radius * 2 + 1) * (blur_radius * 2 + 1));
     
-    // ---- Fade ----
-    vec4 faded = blurred * 0.99;
+    // ---- Evaporate ----
+    vec4 result = vec4(max(0.0, blurred.x - pc.evaporate_speed * pc.delta_time),
+                    max(0.0, blurred.y - pc.evaporate_speed * pc.delta_time),
+                    max(0.0, blurred.z - pc.evaporate_speed * pc.delta_time),
+                    max(0.0, blurred.w - pc.evaporate_speed * pc.delta_time));
     
-    imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), faded);
+    imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), result);
 }
 "
     }

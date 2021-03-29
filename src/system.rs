@@ -1,4 +1,5 @@
 use crate::simulation::agent_shader::ty::PushConstantData;
+use crate::simulation::blur_fade_shader;
 use crate::simulation::Simulation;
 use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
@@ -140,7 +141,14 @@ impl System {
         }
     }
 
-    pub fn main_loop<F: FnMut(&mut bool, &mut PushConstantData, &mut Ui) + 'static>(
+    pub fn main_loop<
+        F: FnMut(
+                &mut bool,
+                &mut PushConstantData,
+                &mut blur_fade_shader::ty::PushConstantData,
+                &mut Ui,
+            ) + 'static,
+    >(
         self,
         simulation: Simulation,
         mut run_ui: F,
@@ -167,14 +175,21 @@ impl System {
 
         let mut sim_parameters: PushConstantData = PushConstantData {
             // Pixels per second.
-            agent_speed: 50.0,
+            agent_speed: 100.0,
             // Radians per second.
-            agent_turn_speed: 10.0,
+            agent_turn_speed: 50.0,
             sensor_radius: 1,
             sensor_angle_spacing: PI / 4.0,
             // Seconds per frame. (60fps)
             delta_time: 0.016667,
         };
+
+        let mut fade_parameters: blur_fade_shader::ty::PushConstantData =
+            blur_fade_shader::ty::PushConstantData {
+                // Seconds per frame. (60fps)
+                delta_time: 0.016667,
+                evaporate_speed: 0.5,
+            };
 
         // target 60 fps
         let target_frame_time = Duration::from_millis(1000 / 60);
@@ -223,7 +238,7 @@ impl System {
                     let mut ui = imgui.frame();
                     let mut run = true;
 
-                    run_ui(&mut run, &mut sim_parameters, &mut ui);
+                    run_ui(&mut run, &mut sim_parameters, &mut fade_parameters, &mut ui);
 
                     if !run {
                         *control_flow = ControlFlow::Exit;
@@ -297,7 +312,7 @@ impl System {
                     // ---- Execute the draw commands ----
 
                     let (buffer_1, buffer_2, buffer_3) =
-                        simulation.create_command_buffers(&sim_parameters);
+                        simulation.create_command_buffers(&sim_parameters, &fade_parameters);
 
                     let future = previous_frame_end
                         .take()

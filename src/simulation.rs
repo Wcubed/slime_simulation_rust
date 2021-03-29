@@ -220,7 +220,6 @@ pub mod agent_shader {
 #version 450
 
 const float PI = 3.1415926535897932384626433832795;
-const float sensor_angle_spacing = PI / 4;
 
 struct Agent {
     vec2 pos;
@@ -236,8 +235,14 @@ layout(set = 0, binding = 2) buffer Agents {
 } buf;
 
 layout(push_constant) uniform PushConstantData {
+    // In pixels / second.
     float agent_speed;
+    // In radians / second.
     float agent_turn_speed;
+    int sensor_radius;
+    // In radians from straight ahead.
+    float sensor_angle_spacing;
+    // How many time is passed per frame.
     float delta_time;
 } pc;
 
@@ -260,7 +265,6 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 1;
     float sensor_centre_distance = 9.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
@@ -268,8 +272,8 @@ float sense(Agent agent, float sensor_angle_offset) {
     ivec2 sensor_centre = ivec2(agent.pos + (sensor_dir_norm * sensor_centre_distance));
     
     float sum = 0;
-    for (int x = -sensor_radius; x <= sensor_radius; x++) {
-        for (int y = -sensor_radius; y <= sensor_radius; y++) {
+    for (int x = -pc.sensor_radius; x <= pc.sensor_radius; x++) {
+        for (int y = -pc.sensor_radius; y <= pc.sensor_radius; y++) {
             ivec2 sample_pos = ivec2(sensor_centre.x + x, sensor_centre.y + y);
 
             if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
@@ -301,8 +305,8 @@ void main() {
     
     // Decide which way to turn.
     float sense_forward = sense(agent, 0);
-    float sense_left = sense(agent, sensor_angle_spacing);
-    float sense_right = sense(agent, -sensor_angle_spacing);
+    float sense_left = sense(agent, pc.sensor_angle_spacing);
+    float sense_right = sense(agent, -pc.sensor_angle_spacing);
     
     float random_steer_strength = normalize_from_hash(random);
     

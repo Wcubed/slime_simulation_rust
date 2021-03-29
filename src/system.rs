@@ -3,6 +3,7 @@ use crate::simulation::Simulation;
 use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use std::f32::consts::PI;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
@@ -169,6 +170,8 @@ impl System {
             agent_speed: 50.0,
             // Radians per second.
             agent_turn_speed: 10.0,
+            sensor_radius: 1,
+            sensor_angle_spacing: PI / 4.0,
             // Seconds per frame. (60fps)
             delta_time: 0.016667,
         };

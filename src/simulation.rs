@@ -80,7 +80,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 100;
+        let agent_amount = 100000;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -199,7 +199,7 @@ impl Simulation {
                     // Pixels per second.
                     agent_speed: 50.0,
                     // Radians per second.
-                    agent_turn_speed: 5.0,
+                    agent_turn_speed: 10.0,
                     // Seconds per frame. (60fps)
                     delta_time: 0.016667,
                 },
@@ -232,7 +232,7 @@ pub mod agent_shader {
 #version 450
 
 const float PI = 3.1415926535897932384626433832795;
-const float sensor_angle_spacing = PI / 2;
+const float sensor_angle_spacing = PI / 4;
 
 struct Agent {
     vec2 pos;
@@ -272,8 +272,8 @@ float normalize_from_hash(uint hash_val) {
 
 
 float sense(Agent agent, float sensor_angle_offset) {
-    int sensor_radius = 2;
-    float sensor_centre_distance = 2.0;
+    int sensor_radius = 1;
+    float sensor_centre_distance = 9.0;
     
     float sensor_angle = agent.angle + sensor_angle_offset;
     vec2 sensor_dir_norm = vec2(cos(sensor_angle), sin(sensor_angle));    
@@ -291,9 +291,9 @@ float sense(Agent agent, float sensor_angle_offset) {
     }
     
     // TODO: Remove debug.
-    if (sum > 0) {
-        imageStore(out_img, sensor_centre, vec4(0.0, 1.0, 0.0, 1.0));
-    }
+    /*if (sum > 0) {
+        imageStore(out_img, sensor_centre, vec4(0.0, sum, 0.0, 1.0));
+    }*/
     
     return sum;
 }
@@ -386,7 +386,7 @@ void main() {
     vec4 blurred = sum / ((blur_radius * 2 + 1) * (blur_radius * 2 + 1));
     
     // ---- Fade ----
-    vec4 faded = blurred * 0.999;
+    vec4 faded = blurred * 0.99;
     
     imageStore(out_img, ivec2(gl_GlobalInvocationID.xy), faded);
 }

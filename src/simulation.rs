@@ -279,7 +279,8 @@ float sense(Agent agent, float sensor_angle_offset) {
             ivec2 sample_pos = ivec2(sensor_centre.x + x, sensor_centre.y + y);
 
             if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
-                sum += imageLoad(trail_img, sample_pos).x;
+                vec4 value = imageLoad(trail_img, sample_pos);
+                sum += value.x + value.y + value.z;
             }
         }
     }
@@ -373,7 +374,7 @@ void main() {
     buf.data[id].pos = new_pos;
 
     // Draw trail.
-    imageStore(out_img, ivec2(agent.pos), vec4(1.0));
+    imageStore(out_img, ivec2(agent.pos), vec4(1.0, 0.0, 0.5, 1.0));
 }
 "
     }

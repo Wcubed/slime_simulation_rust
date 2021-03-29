@@ -53,9 +53,11 @@ pub struct Simulation {
 impl Simulation {
     pub fn init(device: Arc<Device>, queue: Arc<Queue>) -> Simulation {
         let image_size = Dimensions::Dim2d {
-            width: 1024,
+            width: 2000,
             height: 1024,
         };
+        let agent_amount = 200000;
+
         let image_format = Format::R8G8B8A8Unorm;
 
         let agent_sim_image = StorageImage::new(
@@ -74,7 +76,6 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 200000;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -201,7 +202,11 @@ impl Simulation {
                 .expect("Failed to create command buffer");
         blur_builder
             .dispatch(
-                [1024 / 8, 1024 / 8, 1],
+                [
+                    self.result_image.dimensions().width() / 8,
+                    self.result_image.dimensions().height() / 8,
+                    1,
+                ],
                 self.blur_pipeline.clone(),
                 self.blur_set.clone(),
                 fade_parameters.clone(),

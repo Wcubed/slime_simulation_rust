@@ -21,6 +21,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
 use crate::simulation::agent_shader;
+use vulkano::command_buffer::sys::UnsafeCommandBufferBuilderPipelineBarrier;
 
 pub struct System {
     pub event_loop: EventLoop<()>,
@@ -257,8 +258,6 @@ impl System {
                         .clear_color_image(images[image_num].clone(), [0.0; 4].into())
                         .unwrap();
 
-                    simulation.build_commands(&mut cmd_buf_builder);
-
                     cmd_buf_builder
                         .copy_image(
                             simulation.result_image.clone(),
@@ -289,10 +288,18 @@ impl System {
 
                     // ---- Execute the draw commands ----
 
+                    let (buffer_1, buffer_2, buffer_3) = simulation.create_command_buffers();
+
                     let future = previous_frame_end
                         .take()
                         .unwrap()
                         .join(acquire_future)
+                        .then_execute(queue.clone(), buffer_1)
+                        .unwrap()
+                        .then_execute(queue.clone(), buffer_2)
+                        .unwrap()
+                        .then_execute(queue.clone(), buffer_3)
+                        .unwrap()
                         .then_execute(queue.clone(), cmd_buf)
                         .unwrap()
                         .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)

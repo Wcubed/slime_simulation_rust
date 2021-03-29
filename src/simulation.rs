@@ -2,7 +2,12 @@ use rand::Rng;
 use std::f32::consts::PI;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::command_buffer::sys::{
+    UnsafeCommandBufferBuilder, UnsafeCommandBufferBuilderPipelineBarrier,
+};
+use vulkano::command_buffer::{
+    AutoCommandBuffer, AutoCommandBufferBuilder, CommandBufferExecFuture,
+};
 use vulkano::descriptor::descriptor_set::{
     PersistentDescriptorSet, PersistentDescriptorSetBuf, PersistentDescriptorSetImg,
 };
@@ -10,8 +15,10 @@ use vulkano::descriptor::pipeline_layout::PipelineLayout;
 use vulkano::descriptor::PipelineLayoutAbstract;
 use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
-use vulkano::image::{Dimensions, StorageImage};
+use vulkano::image::{Dimensions, ImageLayout, StorageImage};
 use vulkano::pipeline::ComputePipeline;
+use vulkano::swapchain::SwapchainAcquireFuture;
+use vulkano::sync::{AccessFlagBits, GpuFuture, JoinFuture, PipelineStages};
 
 pub struct Simulation {
     pub result_image: Arc<StorageImage<Format>>,
@@ -153,10 +160,15 @@ impl Simulation {
         }
     }
 
-    /// After running the built commands, the result_image will be filled.
-    pub fn build_commands(&self, builder: &mut AutoCommandBufferBuilder) {
-        builder
-            // Transfer old trails.
+    /// The command buffers should be executed in the order given.
+    pub fn create_command_buffers(
+        &self,
+    ) -> (AutoCommandBuffer, AutoCommandBuffer, AutoCommandBuffer) {
+        let mut copy_builder =
+            AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family())
+                .expect("Failed to create command buffer");
+        // Transfer old trails.
+        copy_builder
             .copy_image(
                 self.result_image.clone(),
                 [0; 3],
@@ -173,7 +185,13 @@ impl Simulation {
                 ],
                 1,
             )
-            .unwrap()
+            .unwrap();
+        let copy_buffer = copy_builder.build().unwrap();
+
+        let mut sim_builder =
+            AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family())
+                .expect("Failed to create command buffer");
+        sim_builder
             .dispatch(
                 [self.agent_amount, 1, 1],
                 self.agent_sim_pipeline.clone(),
@@ -187,7 +205,13 @@ impl Simulation {
                     delta_time: 0.016667,
                 },
             )
-            .unwrap()
+            .unwrap();
+        let sim_buffer = sim_builder.build().unwrap();
+
+        let mut blur_builder =
+            AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family())
+                .expect("Failed to create command buffer");
+        blur_builder
             .dispatch(
                 [1024 / 8, 1024 / 8, 1],
                 self.blur_pipeline.clone(),
@@ -195,6 +219,9 @@ impl Simulation {
                 (),
             )
             .unwrap();
+        let blur_buffer = blur_builder.build().unwrap();
+
+        (copy_buffer, sim_buffer, blur_buffer)
     }
 }
 
@@ -259,18 +286,7 @@ float sense(Agent agent, float sensor_angle_offset) {
             ivec2 sample_pos = ivec2(sensor_centre.x + x, sensor_centre.y + y);
 
             if (sample_pos.x >= 0 && sample_pos.x < width && sample_pos.y >= 0 && sample_pos.y < height) {
-                // TODO: Somehow this load call without the debug call blacks out the top part of the image.
                 sum += imageLoad(trail_img, sample_pos).x;
-                
-                // TODO: remove debug.
-                if (sensor_angle_offset == 0) {
-                    imageStore(out_img, sample_pos, vec4(0.0, 0.0, 1.0, 1.0));
-                } else if (sensor_angle_offset < 0) {
-                    imageStore(out_img, sample_pos, vec4(0.0, 1.0, 0.0, 1.0));
-                } else if (sensor_angle_offset > 0) {
-                    imageStore(out_img, sample_pos, vec4(1.0, 0.0, 0.0, 1.0));
-                }
-                // End of debug
             }
         }
     }

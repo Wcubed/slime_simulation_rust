@@ -1,3 +1,4 @@
+use crate::simulation::agent_shader::ty::PushConstantData;
 use crate::simulation::Simulation;
 use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
@@ -19,9 +20,6 @@ use vulkano_win::VkSurfaceBuild;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
-
-use crate::simulation::agent_shader;
-use vulkano::command_buffer::sys::UnsafeCommandBufferBuilderPipelineBarrier;
 
 pub struct System {
     pub event_loop: EventLoop<()>,
@@ -141,7 +139,7 @@ impl System {
         }
     }
 
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(
+    pub fn main_loop<F: FnMut(&mut bool, &mut PushConstantData, &mut Ui) + 'static>(
         self,
         simulation: Simulation,
         mut run_ui: F,
@@ -166,7 +164,14 @@ impl System {
         let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
         let mut last_redraw = Instant::now();
 
-        let mut counter: u32 = 0;
+        let mut sim_parameters: PushConstantData = PushConstantData {
+            // Pixels per second.
+            agent_speed: 50.0,
+            // Radians per second.
+            agent_turn_speed: 10.0,
+            // Seconds per frame. (60fps)
+            delta_time: 0.016667,
+        };
 
         // target 60 fps
         let target_frame_time = Duration::from_millis(1000 / 60);
@@ -215,7 +220,7 @@ impl System {
                     let mut ui = imgui.frame();
                     let mut run = true;
 
-                    run_ui(&mut run, &mut ui);
+                    run_ui(&mut run, &mut sim_parameters, &mut ui);
 
                     if !run {
                         *control_flow = ControlFlow::Exit;
@@ -288,7 +293,8 @@ impl System {
 
                     // ---- Execute the draw commands ----
 
-                    let (buffer_1, buffer_2, buffer_3) = simulation.create_command_buffers();
+                    let (buffer_1, buffer_2, buffer_3) =
+                        simulation.create_command_buffers(&sim_parameters);
 
                     let future = previous_frame_end
                         .take()

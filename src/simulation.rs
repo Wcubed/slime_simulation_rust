@@ -2,12 +2,7 @@ use rand::Rng;
 use std::f32::consts::PI;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::command_buffer::sys::{
-    UnsafeCommandBufferBuilder, UnsafeCommandBufferBuilderPipelineBarrier,
-};
-use vulkano::command_buffer::{
-    AutoCommandBuffer, AutoCommandBufferBuilder, CommandBufferExecFuture,
-};
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
 use vulkano::descriptor::descriptor_set::{
     PersistentDescriptorSet, PersistentDescriptorSetBuf, PersistentDescriptorSetImg,
 };
@@ -15,9 +10,8 @@ use vulkano::descriptor::pipeline_layout::PipelineLayout;
 use vulkano::descriptor::PipelineLayoutAbstract;
 use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
-use vulkano::image::{Dimensions, ImageLayout, StorageImage};
+use vulkano::image::{Dimensions, StorageImage};
 use vulkano::pipeline::ComputePipeline;
-use vulkano::swapchain::SwapchainAcquireFuture;
 
 pub struct Simulation {
     pub result_image: Arc<StorageImage<Format>>,
@@ -162,6 +156,7 @@ impl Simulation {
     /// The command buffers should be executed in the order given.
     pub fn create_command_buffers(
         &self,
+        parameters: &agent_shader::ty::PushConstantData,
     ) -> (AutoCommandBuffer, AutoCommandBuffer, AutoCommandBuffer) {
         let mut copy_builder =
             AutoCommandBufferBuilder::new(self.device.clone(), self.queue.family())
@@ -195,14 +190,7 @@ impl Simulation {
                 [self.agent_amount, 1, 1],
                 self.agent_sim_pipeline.clone(),
                 self.agent_sim_set.clone(),
-                agent_shader::ty::PushConstantData {
-                    // Pixels per second.
-                    agent_speed: 50.0,
-                    // Radians per second.
-                    agent_turn_speed: 10.0,
-                    // Seconds per frame. (60fps)
-                    delta_time: 0.016667,
-                },
+                parameters.clone(),
             )
             .unwrap();
         let sim_buffer = sim_builder.build().unwrap();

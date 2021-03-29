@@ -74,7 +74,7 @@ impl Simulation {
         .unwrap();
 
         let mut rng = rand::thread_rng();
-        let agent_amount = 100000;
+        let agent_amount = 200000;
 
         // Distribute the agents randomly across the image.
         let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
@@ -329,11 +329,19 @@ void main() {
     vec2 new_pos = agent.pos + unit_direction * pc.agent_speed * pc.delta_time;
     
     // Randomly bounce if agent hits the sides.
-    if (new_pos.x < 0 || new_pos.x >= width || new_pos.y < 0 || new_pos.y >= height) {
-        new_pos.x = min(width - 0.01, max(0.01, new_pos.x));
-        new_pos.y = min(height - 0.01, max(0.01, new_pos.y));
-
-        buf.data[id].angle = normalize_from_hash(random) * 2 * PI;
+    if (new_pos.x < 0) {
+        new_pos.x = 0.01;
+        buf.data[id].angle = normalize_from_hash(random) * PI - (0.5 * PI);
+    } else if (new_pos.x >= width) {
+        new_pos.x = width - 0.01;
+        buf.data[id].angle = normalize_from_hash(random) * PI + (0.5 * PI);
+    }
+    if (new_pos.y < 0) {
+        new_pos.y = 0.01;
+        buf.data[id].angle = normalize_from_hash(random) * PI;
+    } else if (new_pos.y >= height) {
+        new_pos.y = height - 0.01;
+        buf.data[id].angle = normalize_from_hash(random) * -PI;
     }
     
     

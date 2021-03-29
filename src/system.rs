@@ -179,7 +179,8 @@ impl System {
             // Radians per second.
             agent_turn_speed: 50.0,
             sensor_radius: 1,
-            sensor_angle_spacing: PI / 4.0,
+            // In the range [0 - PI]
+            sensor_angle_spacing: 0.18,
             // Seconds per frame. (60fps)
             delta_time: 0.016667,
         };

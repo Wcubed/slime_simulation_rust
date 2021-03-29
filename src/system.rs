@@ -4,7 +4,6 @@ use crate::simulation::Simulation;
 use imgui::{Context, Ui};
 use imgui_vulkano_renderer::Renderer;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use std::f32::consts::PI;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
@@ -53,8 +52,8 @@ impl System {
         let surface = WindowBuilder::new()
             .with_title(window_title.to_owned())
             .with_inner_size(winit::dpi::PhysicalSize {
-                width: 1024,
-                height: 1024,
+                width: 2000,
+                height: 1400,
             })
             .build_vk_surface(&event_loop, instance.clone())
             .unwrap();
@@ -189,7 +188,7 @@ impl System {
             blur_fade_shader::ty::PushConstantData {
                 // Seconds per frame. (60fps)
                 delta_time: 0.016667,
-                evaporate_speed: 0.5,
+                evaporate_speed: 0.9,
             };
 
         // target 60 fps

@@ -54,9 +54,9 @@ impl Simulation {
     pub fn init(device: Arc<Device>, queue: Arc<Queue>) -> Simulation {
         let image_size = Dimensions::Dim2d {
             width: 2000,
-            height: 1024,
+            height: 1400,
         };
-        let agent_amount = 200000;
+        let agent_amount = 500_000;
 
         let image_format = Format::R8G8B8A8Unorm;
 
@@ -77,15 +77,22 @@ impl Simulation {
 
         let mut rng = rand::thread_rng();
 
-        // Distribute the agents randomly across the image.
-        let agent_iter = (0..agent_amount).map(|_i| agent_shader::ty::Agent {
-            // No clue what the dummy is for.
-            _dummy0: [0u8; 4],
-            pos: [
-                rng.gen_range(0..image_size.width()) as f32,
-                rng.gen_range(0..image_size.height()) as f32,
-            ],
-            angle: rng.gen::<f32>() * 2.0 * PI,
+        // Distribute the agents randomly in a circle in the centre, in a random direction.
+        let agent_iter = (0..agent_amount).map(|_i| {
+            let distance_from_centre = rng.gen_range(0..image_size.height() / 3) as f32;
+            let angle_form_centre = (rng.gen_range(0..100) as f32 * 2.0 * PI) / 100.0;
+
+            agent_shader::ty::Agent {
+                // No clue what the dummy is for.
+                _dummy0: [0u8; 4],
+                pos: [
+                    image_size.width() as f32 / 2.0
+                        + (angle_form_centre.cos() * distance_from_centre),
+                    image_size.height() as f32 / 2.0
+                        + (angle_form_centre.sin() * distance_from_centre),
+                ],
+                angle: rng.gen::<f32>() * 2.0 * PI,
+            }
         });
         let agents_buffer =
             CpuAccessibleBuffer::from_iter(device.clone(), BufferUsage::all(), false, agent_iter)
